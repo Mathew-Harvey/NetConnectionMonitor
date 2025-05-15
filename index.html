@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Internet Connection Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        #status {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+        #log {
+            border: 1px solid #ccc;
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+        }
+        .online { color: green; }
+        .offline { color: red; }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Internet Connection Monitor</h1>
+    <p>Status: <span id="status">Initializing...</span></p>
+    <button onclick="startMonitoring()">Start Monitoring</button>
+    <button onclick="stopMonitoring()">Stop Monitoring</button>
+    <button onclick="downloadLog()">Download Log</button>
+    <h2>Connection Log</h2>
+    <div id="log"></div>
+
+    <script>
+        let monitoring = false;
+        let logEntries = [];
+        const pingInterval = 5000; // Ping every 5 seconds
+        const pingUrl = 'https://1.1.1.1'; // Google's DNS server
+        const timeout = 2000; // 2 seconds timeout for ping
+
+        async function ping() {
+            const startTime = new Date();
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                const response = await fetch(pingUrl, {
+                    mode: 'no-cors',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                const endTime = new Date();
+                const latency = endTime - startTime;
+                return { online: true, latency };
+            } catch (error) {
+                return { online: false, error: error.message };
+            }
+        }
+
+        function logMessage(message, className) {
+            const timestamp = new Date().toLocaleString();
+            const entry = `[${timestamp}] ${message}`;
+            logEntries.push(entry);
+            const logDiv = document.getElementById('log');
+            const p = document.createElement('p');
+            p.textContent = entry;
+            if (className) p.className = className;
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function checkConnection() {
+            if (!monitoring) return;
+            const result = await ping();
+            const statusSpan = document.getElementById('status');
+            if (result.online) {
+                statusSpan.textContent = `Online (Latency: ${result.latency}ms)`;
+                statusSpan.className = 'online';
+                logMessage(`Connected (Latency: ${result.latency}ms)`, 'online');
+            } else {
+                statusSpan.textContent = 'Offline';
+                statusSpan.className = 'offline';
+                logMessage(`Connection lost: ${result.error}`, 'offline');
+            }
+            setTimeout(checkConnection, pingInterval);
+        }
+
+        function startMonitoring() {
+            if (!monitoring) {
+                monitoring = true;
+                logMessage('Started monitoring...');
+                checkConnection();
+                document.getElementById('status').textContent = 'Monitoring...';
+            }
+        }
+
+        function stopMonitoring() {
+            monitoring = false;
+            logMessage('Stopped monitoring.');
+            document.getElementById('status').textContent = 'Stopped';
+            document.getElementById('status').className = '';
+        }
+
+        function downloadLog() {
+            const blob = new Blob([logEntries.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `connection_log_${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
